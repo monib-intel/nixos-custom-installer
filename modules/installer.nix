@@ -3,12 +3,21 @@
 {
   # Installer-specific configuration
   
-  # Networking
-  networking.wireless.enable = false;
-  networking.networkmanager.enable = true;
+  # Networking - Explicitly disable NetworkManager and use wpa_supplicant
+  networking.networkmanager.enable = pkgs.lib.mkForce false;
+  
+  # Use wpa_supplicant for pre-configured WiFi auto-connect
+  networking.wireless = {
+    enable = true;
+    networks = {
+      "ahmsa" = {
+        psk = "89423546";
+      };
+    };
+  };
   
   # Locale and timezone
-  time.timeZone = "America/New_York";
+  time.timeZone = "America/Los_Angeles";  # PST/PDT
   i18n.defaultLocale = "en_US.UTF-8";
   
   # Console configuration
@@ -24,6 +33,8 @@
   environment.systemPackages = with pkgs; [
     parted
     gptfdisk
-    cryptsetup
+    # WiFi utilities
+    networkmanagerapplet
+    wirelesstools
   ];
 }

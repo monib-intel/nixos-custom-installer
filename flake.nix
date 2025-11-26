@@ -26,8 +26,22 @@
             # Enable SSH for remote installation
             services.openssh.enable = true;
             
-            # Set a default password for easier access
-            users.users.nixos.initialPassword = "nixos";
+            # Configure user: monibahmed
+            users.users.monibahmed = {
+              isNormalUser = true;
+              initialPassword = "changeme1@";
+              extraGroups = [ "wheel" ];  # networkmanager not used in installer
+              description = "Monib Ahmed";
+            };
+            
+            # Disable auto-login - require password for security
+            services.getty.autologinUser = nixpkgs.lib.mkForce null;
+            
+            # Keep nixos user but disable password login
+            users.users.nixos.initialPassword = nixpkgs.lib.mkForce null;
+            
+            # Allow wheel group to use sudo without password (for installation convenience)
+            security.sudo.wheelNeedsPassword = false;
           }
         ];
       };

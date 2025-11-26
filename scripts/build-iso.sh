@@ -6,6 +6,15 @@ echo "Building NixOS installation ISO..."
 echo "Note: Cross-compiling from macOS (ARM) to x86_64-linux..."
 echo ""
 
+# Backup existing ISO if it exists
+OUTPUT_ISO="nixos-custom-installer.iso"
+if [ -f "$OUTPUT_ISO" ]; then
+  BACKUP_NAME="${OUTPUT_ISO}.backup-$(date +%Y%m%d-%H%M%S)"
+  echo "Backing up existing ISO to: $BACKUP_NAME"
+  mv "$OUTPUT_ISO" "$BACKUP_NAME"
+  echo ""
+fi
+
 # Build the NixOS ISO using the flake configuration with cross-compilation
 nix build .#nixosConfigurations.installer.config.system.build.isoImage \
   --extra-platforms x86_64-linux \
@@ -20,7 +29,6 @@ if [ -z "$ISO_FILE" ]; then
 fi
 
 # Copy the generated ISO to the current directory
-OUTPUT_ISO="nixos-custom-installer.iso"
 cp "$ISO_FILE" "$OUTPUT_ISO"
 
 echo ""

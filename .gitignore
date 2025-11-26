@@ -1,9 +1,13 @@
+# WiFi credentials - NEVER commit this!
+wifi-config.nix
+
 # Nix build results
 result
 result-*
 
 # ISO files
 *.iso
+*.iso.backup-*
 
 # Nix flake lock (optional - comment out if you want to commit it)
 # flake.lock
