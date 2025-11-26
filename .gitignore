@@ -1,0 +1,22 @@
+# Nix build results
+result
+result-*
+
+# ISO files
+*.iso
+
+# Nix flake lock (optional - comment out if you want to commit it)
+# flake.lock
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Nix garbage
+.direnv/
