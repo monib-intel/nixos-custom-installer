@@ -37,6 +37,7 @@ nixos-config/
 ├── flake.lock             # Locked dependencies for reproducibility
 ├── deploy.sh              # Main deployment script
 ├── deploy-all.sh          # Batch deployment script
+├── run-tests.sh           # Test runner script
 ├── inventory.txt          # Target name to IP mapping (optional)
 ├── targets/               # Target-specific configurations
 │   ├── common/            # Shared configuration modules
@@ -48,10 +49,17 @@ nixos-config/
 │   │   └── configuration.nix
 │   └── media-center/      # Media center config
 │       └── configuration.nix
-└── modules/               # Optional reusable modules
-    ├── desktop.nix        # Desktop environment config
-    ├── development.nix    # Development tools
-    └── services.nix       # Common services
+├── modules/               # Optional reusable modules
+│   ├── desktop.nix        # Desktop environment config
+│   ├── development.nix    # Development tools
+│   └── services.nix       # Common services
+├── tests/                 # QEMU-based VM tests
+│   ├── README.md          # Testing documentation
+│   ├── basic-health.nix   # Basic health check test
+│   ├── lab-server.nix     # Lab server test
+│   └── ssh-connectivity.nix # SSH connectivity test
+└── .github/workflows/     # CI/CD workflows
+    └── test.yml           # Automated test workflow
 ```
 
 ## Terminology
@@ -203,6 +211,57 @@ git checkout <previous-commit>
 - Ensure monibahmed is in wheel group
 - Check sudo configuration on target
 
+## Testing
+
+This project includes a QEMU-based testing framework that boots real NixOS VMs to verify configurations.
+
+### Quick Test Commands
+
+```bash
+# Run all tests
+./run-tests.sh
+
+# Run a specific test
+./run-tests.sh basic-health-test
+
+# List available tests
+./run-tests.sh list
+
+# Start interactive VM for manual testing
+./run-tests.sh interactive
+```
+
+### Using Nix Directly
+
+```bash
+# Check all configurations and run tests
+nix flake check
+
+# Run specific test
+nix build .#checks.x86_64-linux.basic-health-test
+
+# Start interactive test VM
+nix run .#test-vm
+```
+
+### Available Tests
+
+| Test | Description |
+|------|-------------|
+| `basic-health-test` | Verifies base configuration, services, and packages |
+| `lab-server-test` | Tests lab server with PostgreSQL and dev tools |
+| `ssh-connectivity-test` | Tests SSH between two VMs |
+
+### CI/CD Integration
+
+Tests run automatically on push and pull requests via GitHub Actions. The workflow:
+
+1. Checks flake syntax
+2. Validates all configurations can build
+3. Runs QEMU-based VM tests
+
+See [tests/README.md](tests/README.md) for detailed testing documentation.
+
 ## Requirements
 
 ### On Host (deployment machine)
@@ -219,6 +278,6 @@ git checkout <previous-commit>
 
 - Binary cache for faster deployments
 - Automatic target discovery
-- Health checks and monitoring
+- ~~Health checks and monitoring~~ ✅ Implemented via QEMU tests
 - Secrets management with agenix
 - Deployment notifications

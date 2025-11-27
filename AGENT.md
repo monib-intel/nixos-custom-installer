@@ -460,9 +460,15 @@ Design with these potential enhancements in mind:
    - Hooks for deployment notifications
    - Health check endpoints
 
-4. **CI/CD Integration**
-   - GitHub Actions or similar
-   - Automated testing of configurations
+4. **CI/CD Integration** ✅ IMPLEMENTED
+   - GitHub Actions workflow in `.github/workflows/test.yml`
+   - Automated QEMU-based VM testing
+   - Tests run on push and pull requests
+
+5. **QEMU-based Testing** ✅ IMPLEMENTED
+   - VM tests in `tests/` directory
+   - Run with `./run-tests.sh` or `nix flake check`
+   - Tests: basic-health, lab-server, ssh-connectivity
 
 ## Deliverables
 
@@ -475,6 +481,7 @@ Design with these potential enhancements in mind:
    - `deploy.sh` - Main deployment script
    - `deploy-all.sh` - Batch deployment
    - `discover-targets.sh` - Network discovery (optional)
+   - `run-tests.sh` - QEMU-based test runner
 
 3. **Documentation**
    - Updated README.md with all examples working
