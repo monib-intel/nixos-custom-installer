@@ -75,15 +75,25 @@ show_usage() {
     echo "  $0 interactive               # Start interactive VM for manual testing"
 }
 
+# List of available tests - update when adding new tests
+AVAILABLE_TESTS=("basic-health-test" "lab-server-test" "ssh-connectivity-test")
+
 list_tests() {
     print_status "Available tests:"
     echo ""
-    nix flake show --json 2>/dev/null | jq -r '.checks."x86_64-linux" | keys[]' 2>/dev/null || {
-        # Fallback if jq not available
-        echo "  - basic-health-test"
-        echo "  - lab-server-test"
-        echo "  - ssh-connectivity-test"
-    }
+    if command -v jq &> /dev/null; then
+        nix flake show --json 2>/dev/null | jq -r '.checks."x86_64-linux" | keys[]' 2>/dev/null || {
+            # Fallback to predefined list
+            for test in "${AVAILABLE_TESTS[@]}"; do
+                echo "  - $test"
+            done
+        }
+    else
+        # jq not available, use predefined list
+        for test in "${AVAILABLE_TESTS[@]}"; do
+            echo "  - $test"
+        done
+    fi
 }
 
 run_test() {
@@ -110,9 +120,8 @@ run_all_tests() {
     
     local failed=0
     local passed=0
-    local tests=("basic-health-test" "lab-server-test" "ssh-connectivity-test")
     
-    for test in "${tests[@]}"; do
+    for test in "${AVAILABLE_TESTS[@]}"; do
         if run_test "$test"; then
             ((passed++))
         else

@@ -1,5 +1,7 @@
 # SSH connectivity test
 # Verifies that SSH authentication and connections work correctly
+# Note: This test uses a hardcoded password for isolated VM testing only.
+# The password is not a security concern as it's used only in ephemeral QEMU VMs.
 { pkgs, lib, ... }:
 
 pkgs.nixosTest {
@@ -24,7 +26,7 @@ pkgs.nixosTest {
       # Enable password authentication for testing
       services.openssh.settings.PasswordAuthentication = true;
 
-      # Set a known password for testing
+      # Test password for isolated VM testing only
       users.users.monibahmed.password = "testpassword";
     };
 
@@ -63,6 +65,7 @@ pkgs.nixosTest {
     server_ip = server.succeed("hostname -I").strip().split()[0]
 
     # Test password-based SSH connection using sshpass
+    # Note: Password is for isolated VM test environment only
     client.succeed(
         f"sshpass -p 'testpassword' ssh -o StrictHostKeyChecking=no monibahmed@{server_ip} 'echo connected'"
     )

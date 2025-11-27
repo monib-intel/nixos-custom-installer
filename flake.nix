@@ -11,46 +11,8 @@
       pkgs = nixpkgs.legacyPackages.${system};
       lib = nixpkgs.lib;
       
-      # Helper to create a test VM configuration
-      makeTestVm = name: modules: pkgs.nixosTest {
-        inherit name;
-        nodes.machine = { config, pkgs, lib, ... }: {
-          imports = modules;
-          
-          # VM-specific settings for QEMU testing
-          virtualisation = {
-            memorySize = 2048;
-            cores = 2;
-            graphics = false;
-          };
-          
-          # Override file systems for VM testing
-          fileSystems = lib.mkForce {
-            "/" = {
-              device = "none";
-              fsType = "tmpfs";
-              options = [ "defaults" "size=2G" "mode=755" ];
-            };
-          };
-        };
-        
-        testScript = ''
-          machine.start()
-          machine.wait_for_unit("multi-user.target")
-          
-          # Verify essential services
-          machine.succeed("systemctl is-active sshd.service")
-          
-          # Verify user exists
-          machine.succeed("id monibahmed")
-          
-          # Verify hostname
-          hostname = machine.succeed("hostname").strip()
-          print(f"VM hostname: {hostname}")
-          
-          print("Basic VM health check passed!")
-        '';
-      };
+      # Test password used in QEMU VM tests (not a security concern - isolated test environment)
+      testPassword = "testpassword";
     in
     {
       nixosConfigurations = {
@@ -223,6 +185,7 @@
         };
         
         # SSH connectivity test between two VMs
+        # Note: Uses testPassword defined in flake let-binding for test isolation
         ssh-connectivity-test = pkgs.nixosTest {
           name = "ssh-connectivity-test";
           
@@ -242,7 +205,8 @@
               };
               
               services.openssh.settings.PasswordAuthentication = true;
-              users.users.monibahmed.password = "testpassword";
+              # Test password for isolated VM testing only
+              users.users.monibahmed.password = testPassword;
             };
             
             client = { config, pkgs, lib, ... }: {
@@ -271,16 +235,16 @@
             # Test SSH port
             server.succeed("ss -tlnp | grep -q ':22'")
             
-            # Test SSH connectivity
+            # Test SSH connectivity (password is for isolated VM test environment only)
             server_ip = server.succeed("hostname -I").strip().split()[0]
             
             client.succeed(
-                f"sshpass -p 'testpassword' ssh -o StrictHostKeyChecking=no monibahmed@{server_ip} 'echo connected'"
+                f"sshpass -p '${testPassword}' ssh -o StrictHostKeyChecking=no monibahmed@{server_ip} 'echo connected'"
             )
             
             # Verify command execution
             result = client.succeed(
-                f"sshpass -p 'testpassword' ssh -o StrictHostKeyChecking=no monibahmed@{server_ip} 'hostname'"
+                f"sshpass -p '${testPassword}' ssh -o StrictHostKeyChecking=no monibahmed@{server_ip} 'hostname'"
             ).strip()
             assert result == "server", f"Expected 'server', got '{result}'"
             
