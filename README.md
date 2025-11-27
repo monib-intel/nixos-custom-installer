@@ -1,306 +1,224 @@
-# NixOS Server Setup
+# NixOS Network Deployment System
 
-Automated NixOS server deployment using flakes, nixos-anywhere, and home-manager for a declarative, reproducible server configuration.
+A git-based, reproducible NixOS deployment system that enables any host on the network to deploy configurations to any target machine.
 
 ## Overview
 
-This repository contains the complete configuration for deploying a NixOS server with:
-- Automated installation via nixos-anywhere
-- Declarative disk partitioning with disko
-- User environment management with home-manager
-- Remote development access via SSH/VS Code
-- WebDAV and other services for PKM workflow
-
-## Prerequisites
-
-### On Your Local Machine
-- Nix with flakes enabled
-- SSH access configured
-- Git for version control
-
-### On Target Server
-- Physical or remote access to boot a live environment
-- For bare metal: USB drive or IPMI/iDRAC for ISO mounting
-- For hosted: Provider's rescue mode
-- Network connectivity
-
-## Repository Structure
-
-```
-.
-├── flake.nix                 # Main flake configuration
-├── flake.lock               # Locked dependency versions
-├── configuration.nix        # System-level configuration
-├── hardware-configuration.nix # Hardware-specific settings
-├── disko-config.nix         # Disk partitioning layout
-├── home.nix                 # User environment (home-manager)
-├── scripts/
-│   ├── build-iso.sh         # Build bootable installer ISO
-│   └── test-iso-qemu.sh     # Test ISO with QEMU
-└── README.md                # This file
-```
+This system allows you to:
+- Deploy NixOS configurations from any machine to any target on your local network
+- Maintain named configurations for specific machines (lab-server, dev-workstation, etc.)
+- Track all system configurations in git for reproducibility
+- Deploy without complex security infrastructure (designed for trusted local networks)
 
 ## Quick Start
 
-### 1. Enable Flakes on Your Local Machine
+### Deploy to a target
+```bash
+# From any host machine, deploy a named configuration to a target
+./deploy.sh lab-server 192.168.1.50
+
+# Deploy to multiple targets
+./deploy-all.sh
+```
+
+### Self-deployment
+```bash
+# SSH into target and deploy to itself
+ssh monibahmed@lab-server
+cd nixos-config
+./deploy.sh lab-server localhost
+```
+
+## Project Structure
+
+```
+nixos-config/
+├── flake.nix              # Nix flake defining all target configurations
+├── flake.lock             # Locked dependencies for reproducibility
+├── deploy.sh              # Main deployment script
+├── deploy-all.sh          # Batch deployment script
+├── inventory.txt          # Target name to IP mapping (optional)
+├── targets/               # Target-specific configurations
+│   ├── common/            # Shared configuration modules
+│   │   ├── base.nix       # Base system configuration
+│   │   └── users.nix      # User configuration (monibahmed)
+│   ├── lab-server/        # Lab server specific config
+│   │   └── configuration.nix
+│   ├── dev-workstation/   # Development workstation config
+│   │   └── configuration.nix
+│   └── media-center/      # Media center config
+│       └── configuration.nix
+└── modules/               # Optional reusable modules
+    ├── desktop.nix        # Desktop environment config
+    ├── development.nix    # Development tools
+    └── services.nix       # Common services
+```
+
+## Terminology
+
+- **Host**: The machine initiating the deployment (where you run deploy commands)
+- **Target**: The machine receiving the deployment (where NixOS will be installed/updated)
+- **Configuration**: A named NixOS configuration (e.g., lab-server, dev-workstation)
+
+## Adding a New Target
+
+1. Create a new directory under `targets/`:
+   ```bash
+   mkdir targets/new-machine
+   ```
+
+2. Create configuration file:
+   ```bash
+   cp targets/template/configuration.nix targets/new-machine/
+   ```
+
+3. Edit the configuration for your specific needs
+
+4. Add to `flake.nix`:
+   ```nix
+   nixosConfigurations = {
+     new-machine = nixpkgs.lib.nixosSystem {
+       system = "x86_64-linux";
+       modules = [
+         ./targets/common/base.nix
+         ./targets/new-machine/configuration.nix
+         { networking.hostName = "new-machine"; }
+       ];
+     };
+   };
+   ```
+
+5. Deploy:
+   ```bash
+   ./deploy.sh new-machine 192.168.1.XX
+   ```
+
+## Initial Target Setup
+
+For a new machine that needs NixOS:
+
+1. Install minimal NixOS from USB/ISO
+2. Enable SSH and create user:
+   ```nix
+   {
+     services.openssh.enable = true;
+     users.users.monibahmed = {
+       isNormalUser = true;
+       extraGroups = [ "wheel" ];
+       initialPassword = "changeme";  # Change after first deploy
+     };
+   }
+   ```
+3. Note the IP address
+4. From any host machine:
+   ```bash
+   ./deploy.sh target-name <ip-address>
+   ```
+
+## Network Discovery
+
+Find available NixOS targets on your network:
 
 ```bash
-# Add to ~/.config/nix/nix.conf or /etc/nix/nix.conf
-experimental-features = nix-command flakes
+# Using nmap
+nmap -p 22 192.168.1.0/24
+
+# Using the discovery script
+./discover-targets.sh
 ```
 
-### 2. Clone and Customize This Repository
+## Deployment Examples
 
+### Deploy specific configuration to specific IP
 ```bash
-git clone <your-repo-url>
-cd nixos-server-config
-
-# Edit configuration files:
-# - configuration.nix: System settings, services, users
-# - disko-config.nix: Disk layout
-# - home.nix: User dotfiles and packages
+./deploy.sh lab-server 192.168.1.50
 ```
 
-### 3. Add Your SSH Key
-
-```nix
-# In configuration.nix
-users.users.monib = {
-  openssh.authorizedKeys.keys = [
-    "ssh-ed25519 AAAAC3... your-public-key"
-  ];
-};
-```
-
-### 4. Boot Target Server into Live Environment
-
-**Option A: USB Boot (Home Lab)**
+### Deploy using hostname (if mDNS is configured)
 ```bash
-# Build custom installer ISO using the provided script
-./scripts/build-iso.sh
-
-# Or build manually with nix
-nix build .#nixosConfigurations.installer.config.system.build.isoImage --out-link result-iso
-
-# Test in QEMU before writing to USB (recommended)
-./scripts/test-iso-qemu.sh
-
-# Write to USB
-sudo dd if=result-iso/iso/nixos-*.iso of=/dev/sdX bs=4M status=progress
-
-# Boot target server from USB
+./deploy.sh dev-workstation dev-workstation.local
 ```
 
-**Option B: Remote Management (IPMI/iDRAC)**
-- Access remote management interface
-- Mount the built ISO as virtual media
-- Boot from virtual media
-
-**Option C: Hosting Provider Rescue Mode**
-- Boot into provider's rescue system via control panel
-
-### 5. Deploy with nixos-anywhere
-
-Once the target is booted and accessible via SSH:
-
+### Deploy from configuration directory
 ```bash
-# From your local machine
-nix run github:nix-community/nixos-anywhere -- \
-  --flake .#your-server \
-  root@<target-ip>
+cd /path/to/nixos-config
+nix run .#deploy lab-server 192.168.1.50
 ```
 
-This will:
-- Partition disks according to disko-config.nix
-- Install NixOS with your configuration
-- Set up home-manager for your user
-- Reboot into the new system
-
-### 6. Connect via VS Code
-
-After installation completes:
-
+### Update all targets
 ```bash
-# Test SSH connection
-ssh monib@<server-ip>
-
-# In VS Code:
-# 1. Install "Remote - SSH" extension
-# 2. Connect to: monib@<server-ip>
-# 3. VS Code will auto-install its server components
+./deploy-all.sh
 ```
 
-## Configuration Files Explained
+## Configuration Management
 
-### flake.nix
-Defines inputs (nixpkgs, home-manager, disko) and outputs (system configurations). This is the entry point for your entire system definition.
-
-### configuration.nix
-System-level settings:
-- Network configuration
-- Enabled services (SSH, WebDAV, etc.)
-- User accounts
-- Firewall rules
-- System packages
-
-### disko-config.nix
-Declarative disk partitioning:
-- Partition layout (EFI, swap, root)
-- Filesystem types
-- Mount points
-
-### home.nix
-User-level configuration via home-manager:
-- Shell environment (zsh, bash)
-- Development tools (git, neovim, etc.)
-- Dotfiles and personal settings
-- User packages
-
-## Common Tasks
-
-### Build and Test ISO
-
-Build the installer ISO and test it in a virtual machine before deploying to hardware:
-
+### Update configurations
 ```bash
-# Enter the development shell with required tools
-nix develop
+# Pull latest changes
+git pull
 
-# Build the ISO
-./scripts/build-iso.sh
-
-# Test with QEMU (requires KVM for better performance)
-./scripts/test-iso-qemu.sh
-
-# Customize QEMU settings
-./scripts/test-iso-qemu.sh --memory 4096 --cpus 4 --disk 40G
-
-# Test a specific ISO file
-./scripts/test-iso-qemu.sh /path/to/custom.iso
+# Deploy to specific target
+./deploy.sh lab-server 192.168.1.50
 ```
 
-The QEMU test environment:
-- Creates a virtual disk for testing installations
-- Forwards port 2222 to SSH (port 22) in the VM
-- Uses UEFI boot (requires OVMF)
-- Supports both KVM-accelerated and software emulation
-
-Connect to the running VM via SSH:
+### Test changes
 ```bash
-ssh -p 2222 root@localhost
-```
+# Create a test branch
+git checkout -b test-changes
 
-### Update System Configuration
+# Make your changes
+vim targets/lab-server/configuration.nix
 
-```bash
-# Edit configuration files
-vim configuration.nix
+# Deploy to test target
+./deploy.sh lab-server 192.168.1.50
 
-# Test configuration locally (if on NixOS)
-sudo nixos-rebuild test --flake .#your-server
-
-# Deploy to remote server
-nixos-rebuild switch --flake .#your-server \
-  --target-host monib@<server-ip> \
-  --use-remote-sudo
-```
-
-### Update Dependencies
-
-```bash
-# Update flake inputs
-nix flake update
-
-# Review changes
-git diff flake.lock
-
-# Deploy updated system
-nixos-rebuild switch --flake .#your-server --target-host monib@<server-ip>
-```
-
-### Add New Service
-
-```nix
-# In configuration.nix
-services.yourservice = {
-  enable = true;
-  # configuration options
-};
-
-# Open firewall if needed
-networking.firewall.allowedTCPPorts = [ 8080 ];
+# If successful, merge to main
+git checkout main
+git merge test-changes
 ```
 
 ### Rollback
-
-NixOS keeps previous generations:
-
 ```bash
-# SSH to server
-ssh monib@<server-ip>
-
-# List generations
-sudo nix-env --list-generations --profile /nix/var/nix/profiles/system
-
-# Rollback to previous
+# On the target machine
 sudo nixos-rebuild switch --rollback
 
-# Or boot into specific generation via bootloader menu
+# Or redeploy previous git commit
+git checkout <previous-commit>
+./deploy.sh lab-server 192.168.1.50
 ```
 
 ## Troubleshooting
 
-### nixos-anywhere fails with disk errors
-Check disko-config.nix device paths match your target hardware. Boot into live environment and run `lsblk` to verify disk names.
+### SSH connection issues
+- Ensure `monibahmed` user exists on target
+- Check SSH service is running: `systemctl status sshd`
+- Verify network connectivity: `ping <target-ip>`
 
-### SSH connection refused after install
-Verify firewall settings in configuration.nix allow SSH (port 22). Check that openssh.enable = true.
+### Build failures
+- Check flake.nix syntax: `nix flake check`
+- Verify configuration: `nix build .#nixosConfigurations.lab-server.config.system.build.toplevel`
+- Review logs: `journalctl -xe`
 
-### VS Code remote connection issues
-Ensure your user has proper shell and permissions. VS Code needs write access to ~/.vscode-server.
+### Permission issues
+- Ensure monibahmed is in wheel group
+- Check sudo configuration on target
 
-### Build fails with sandbox errors
-Some ISO builds need `--option sandbox false`. Try without it first for security.
+## Requirements
 
-## Security Considerations
+### On Host (deployment machine)
+- Nix with flakes enabled
+- Network access to targets
+- This git repository cloned
 
-- Use SSH keys, not passwords
-- Keep PermitRootLogin = "no"
-- Configure firewall to only allow necessary ports
-- Regularly update with `nix flake update`
-- Review configuration changes before deploying
+### On Target (machines being deployed to)
+- NixOS installed (minimal is fine)
+- SSH enabled
+- User `monibahmed` with sudo access
 
-## Advanced Topics
+## Future Enhancements
 
-### Multiple Machines
-Define multiple configurations in flake.nix:
-
-```nix
-nixosConfigurations = {
-  server1 = nixpkgs.lib.nixosSystem { ... };
-  server2 = nixpkgs.lib.nixosSystem { ... };
-};
-```
-
-### Secrets Management
-Consider using sops-nix or agenix for managing secrets like passwords and API keys.
-
-### Backup Strategy
-NixOS configuration is in git, but data needs separate backup. Consider:
-- Regular backups of /home and /var
-- Automated backup services (restic, borg)
-- Version control for configuration files
-
-## Resources
-
-- [NixOS Manual](https://nixos.org/manual/nixos/stable/)
-- [nixos-anywhere Documentation](https://github.com/nix-community/nixos-anywhere)
-- [home-manager Manual](https://nix-community.github.io/home-manager/)
-- [disko Documentation](https://github.com/nix-community/disko)
-- [Nix Flakes](https://nixos.wiki/wiki/Flakes)
-
-## Support
-
-For issues specific to this configuration, open an issue in this repository.
-
-For NixOS questions, consult the official documentation or community forums.
+- Binary cache for faster deployments
+- Automatic target discovery
+- Health checks and monitoring
+- Secrets management with agenix
+- Deployment notifications
