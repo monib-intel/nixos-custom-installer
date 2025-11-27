@@ -1,1 +1,24 @@
+# Nix build artifacts
+result
+result-*
 
+# Flake lock backup
+flake.lock.backup
+
+# Editor artifacts
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Hardware configurations (target-specific, should be generated locally)
+# Uncomment the line below if you want to track hardware configs in git
+# !targets/*/hardware-configuration.nix
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp

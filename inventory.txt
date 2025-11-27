@@ -1,0 +1,10 @@
+# NixOS Deployment Inventory
+# Format: target-name:ip-address
+# Lines starting with # are comments
+
+# Example targets (modify for your network):
+lab-server:192.168.1.50
+dev-workstation:192.168.1.60
+media-center:192.168.1.75
+
+# Add more targets below:
