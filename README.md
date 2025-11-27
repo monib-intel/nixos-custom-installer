@@ -34,6 +34,9 @@ This repository contains the complete configuration for deploying a NixOS server
 ├── hardware-configuration.nix # Hardware-specific settings
 ├── disko-config.nix         # Disk partitioning layout
 ├── home.nix                 # User environment (home-manager)
+├── scripts/
+│   ├── build-iso.sh         # Build bootable installer ISO
+│   └── test-iso-qemu.sh     # Test ISO with QEMU
 └── README.md                # This file
 ```
 
@@ -73,11 +76,17 @@ users.users.monib = {
 
 **Option A: USB Boot (Home Lab)**
 ```bash
-# Build custom installer ISO
-nix build .#nixosConfigurations.installer.config.system.build.isoImage
+# Build custom installer ISO using the provided script
+./scripts/build-iso.sh
+
+# Or build manually with nix
+nix build .#nixosConfigurations.installer.config.system.build.isoImage --out-link result-iso
+
+# Test in QEMU before writing to USB (recommended)
+./scripts/test-iso-qemu.sh
 
 # Write to USB
-sudo dd if=result/iso/nixos-*.iso of=/dev/sdX bs=4M status=progress
+sudo dd if=result-iso/iso/nixos-*.iso of=/dev/sdX bs=4M status=progress
 
 # Boot target server from USB
 ```
@@ -148,6 +157,38 @@ User-level configuration via home-manager:
 - User packages
 
 ## Common Tasks
+
+### Build and Test ISO
+
+Build the installer ISO and test it in a virtual machine before deploying to hardware:
+
+```bash
+# Enter the development shell with required tools
+nix develop
+
+# Build the ISO
+./scripts/build-iso.sh
+
+# Test with QEMU (requires KVM for better performance)
+./scripts/test-iso-qemu.sh
+
+# Customize QEMU settings
+./scripts/test-iso-qemu.sh --memory 4096 --cpus 4 --disk 40G
+
+# Test a specific ISO file
+./scripts/test-iso-qemu.sh /path/to/custom.iso
+```
+
+The QEMU test environment:
+- Creates a virtual disk for testing installations
+- Forwards port 2222 to SSH (port 22) in the VM
+- Uses UEFI boot (requires OVMF)
+- Supports both KVM-accelerated and software emulation
+
+Connect to the running VM via SSH:
+```bash
+ssh -p 2222 root@localhost
+```
 
 ### Update System Configuration
 

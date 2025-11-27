@@ -91,5 +91,22 @@
           })
         ];
       };
+
+      # Development shell with tools for building ISO and testing with QEMU
+      devShells.${system}.default = pkgs.mkShell {
+        name = "nixos-dev";
+        buildInputs = with pkgs; [
+          qemu
+          OVMF
+        ];
+        shellHook = ''
+          echo "NixOS Custom Installer Development Shell"
+          echo ""
+          echo "Available commands:"
+          echo "  ./scripts/build-iso.sh      - Build bootable installer ISO"
+          echo "  ./scripts/test-iso-qemu.sh  - Test ISO with QEMU"
+          echo ""
+        '';
+      };
     };
 }

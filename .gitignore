@@ -1,6 +1,10 @@
 # Nix build artifacts
 result
 result-*
+result-iso
+
+# QEMU disk images
+*.qcow2
 
 # Flake lock backup
 *.lock.bak
