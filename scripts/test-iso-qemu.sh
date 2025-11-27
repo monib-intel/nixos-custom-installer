@@ -12,6 +12,32 @@ DISK_SIZE="${QEMU_DISK_SIZE:-20G}"
 DISK_FILE="${QEMU_DISK_FILE:-/tmp/nixos-test-disk.qcow2}"
 ISO_PATH=""
 
+# Find OVMF firmware path
+find_ovmf() {
+    local ovmf_paths=(
+        # Nix store paths (when running in nix develop)
+        "/nix/store/"*"-OVMF-"*/FV/OVMF.fd
+        # Common Linux distribution paths
+        "/usr/share/ovmf/OVMF.fd"
+        "/usr/share/OVMF/OVMF_CODE.fd"
+        "/usr/share/edk2/ovmf/OVMF_CODE.fd"
+        "/usr/share/qemu/OVMF.fd"
+    )
+    
+    for path in "${ovmf_paths[@]}"; do
+        # Use ls to expand glob patterns
+        local expanded
+        expanded=$(ls -1 $path 2>/dev/null | head -1) || true
+        if [ -n "$expanded" ] && [ -f "$expanded" ]; then
+            echo "$expanded"
+            return 0
+        fi
+    done
+    
+    echo ""
+    return 1
+}
+
 usage() {
     echo "Usage: $0 [OPTIONS] [ISO_PATH]"
     echo ""
@@ -97,6 +123,22 @@ echo "CPUs: $CPUS"
 echo "Disk: $DISK_FILE ($DISK_SIZE)"
 echo ""
 
+# Find OVMF firmware
+OVMF_PATH=$(find_ovmf)
+if [ -z "$OVMF_PATH" ]; then
+    echo "Error: OVMF firmware not found."
+    echo ""
+    echo "Please run this script from the nix development shell:"
+    echo "  nix develop"
+    echo "  ./scripts/test-iso-qemu.sh"
+    echo ""
+    echo "Or install OVMF/edk2-ovmf package on your system."
+    exit 1
+fi
+
+echo "OVMF: $OVMF_PATH"
+echo ""
+
 # Create disk image if it doesn't exist
 if [ ! -f "$DISK_FILE" ]; then
     echo "Creating virtual disk: $DISK_FILE"
@@ -122,7 +164,7 @@ qemu-system-x86_64 \
     -drive file="$DISK_FILE",format=qcow2,if=virtio \
     -netdev user,id=net0,hostfwd=tcp::2222-:22 \
     -device virtio-net-pci,netdev=net0 \
-    -bios /usr/share/ovmf/OVMF.fd \
+    -bios "$OVMF_PATH" \
     -display gtk \
     2>/dev/null || {
         # Fallback without KVM if not available
@@ -135,6 +177,6 @@ qemu-system-x86_64 \
             -drive file="$DISK_FILE",format=qcow2,if=virtio \
             -netdev user,id=net0,hostfwd=tcp::2222-:22 \
             -device virtio-net-pci,netdev=net0 \
-            -bios /usr/share/ovmf/OVMF.fd \
+            -bios "$OVMF_PATH" \
             -display gtk
     }
