@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, sshPublicKey, ... }:
 
 {
   imports = [
@@ -28,12 +28,12 @@
     isNormalUser = true;
     description = "Monib";
     extraGroups = [ "wheel" "networkmanager" ];
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOcip7Kce5IxHRkxZIkW0h7qO5RifTMJ5q2jkasicRus ahmmo@Monib-Desktop"
-    ];
+    openssh.authorizedKeys.keys = [ sshPublicKey ];
   };
 
-  # Enable sudo without password for wheel group
+  # Enable passwordless sudo for wheel group
+  # This is intentional for a personal server to simplify administration
+  # For production systems, consider enabling password requirement
   security.sudo.wheelNeedsPassword = false;
 
   # SSH configuration

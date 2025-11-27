@@ -23,6 +23,8 @@
               };
             };
             # Swap partition
+            # Default 4G is suitable for systems with 8-16GB RAM
+            # Adjust based on your hardware (recommend 1x-2x RAM for hibernation)
             swap = {
               size = "4G";
               content = {

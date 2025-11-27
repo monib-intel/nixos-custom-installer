@@ -19,11 +19,15 @@
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      
+      # Centralized SSH key configuration - update this with your SSH public key
+      sshPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOcip7Kce5IxHRkxZIkW0h7qO5RifTMJ5q2jkasicRus ahmmo@Monib-Desktop";
     in
     {
       # Main server configuration for deployment
       nixosConfigurations.server = nixpkgs.lib.nixosSystem {
         inherit system;
+        specialArgs = { inherit sshPublicKey; };
         modules = [
           disko.nixosModules.disko
           ./configuration.nix
@@ -54,7 +58,7 @@
 
             # Add SSH key for root access during installation
             users.users.root.openssh.authorizedKeys.keys = [
-              "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOcip7Kce5IxHRkxZIkW0h7qO5RifTMJ5q2jkasicRus ahmmo@Monib-Desktop"
+              sshPublicKey
             ];
 
             # Enable networking
