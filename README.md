@@ -1,206 +1,265 @@
-# NixOS Installer
+# NixOS Server Setup
 
-This project provides a set of configurations and scripts for generating installation media for NixOS. It includes the necessary files to customize the installation process and ensure a smooth setup.
+Automated NixOS server deployment using flakes, nixos-anywhere, and home-manager for a declarative, reproducible server configuration.
 
-## Project Structure
+## Overview
 
-- **configuration.nix**: Main configuration file for the NixOS installation, defining system settings, services, and packages.
-- **hardware-configuration.nix**: Contains hardware-specific configurations generated during the installation process.
-- **flake.nix**: Defines the Nix flake for building the installation media, specifying inputs and outputs.
-- **flake.lock**: Locks the versions of inputs specified in `flake.nix` for reproducibility.
-- **modules/**: Contains reusable base configurations and installation-specific modules.
-  - **base.nix**: Base configurations and modules.
-  - **installer.nix**: Configurations and functions related to the NixOS installation process.
-- **overlays/**: Defines overlays to modify or extend the Nix package set.
-  - **default.nix**: Custom package versions or additional packages.
-- **scripts/**: Automation scripts for building and testing the installation media.
-  - **build-iso.sh**: Automates the ISO building process.
-  - **test-vm.sh**: Sets up a virtual machine to test the installation media.
+This repository contains the complete configuration for deploying a NixOS server with:
+- Automated installation via nixos-anywhere
+- Declarative disk partitioning with disko
+- User environment management with home-manager
+- Remote development access via SSH/VS Code
+- WebDAV and other services for PKM workflow
 
 ## Prerequisites
 
-Install Nix on macOS:
-```bash
-sh <(curl -L https://nixos.org/nix/install)
+### On Your Local Machine
+- Nix with flakes enabled
+- SSH access configured
+- Git for version control
+
+### On Target Server
+- Physical or remote access to boot a live environment
+- For bare metal: USB drive or IPMI/iDRAC for ISO mounting
+- For hosted: Provider's rescue mode
+- Network connectivity
+
+## Repository Structure
+
+```
+.
+├── flake.nix                 # Main flake configuration
+├── flake.lock               # Locked dependency versions
+├── configuration.nix        # System-level configuration
+├── hardware-configuration.nix # Hardware-specific settings
+├── disko-config.nix         # Disk partitioning layout
+├── home.nix                 # User environment (home-manager)
+└── README.md                # This file
 ```
 
-## Usage
+## Quick Start
 
-### Building the ISO
+### 1. Enable Flakes on Your Local Machine
 
-**Method 1: Using the build script**
 ```bash
-./scripts/build-iso.sh
+# Add to ~/.config/nix/nix.conf or /etc/nix/nix.conf
+experimental-features = nix-command flakes
 ```
 
-**Method 2: Direct nix build**
+### 2. Clone and Customize This Repository
+
 ```bash
+git clone <your-repo-url>
+cd nixos-server-config
+
+# Edit configuration files:
+# - configuration.nix: System settings, services, users
+# - disko-config.nix: Disk layout
+# - home.nix: User dotfiles and packages
+```
+
+### 3. Add Your SSH Key
+
+```nix
+# In configuration.nix
+users.users.monib = {
+  openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3... your-public-key"
+  ];
+};
+```
+
+### 4. Boot Target Server into Live Environment
+
+**Option A: USB Boot (Home Lab)**
+```bash
+# Build custom installer ISO
 nix build .#nixosConfigurations.installer.config.system.build.isoImage
+
+# Write to USB
+sudo dd if=result/iso/nixos-*.iso of=/dev/sdX bs=4M status=progress
+
+# Boot target server from USB
 ```
 
-**Important Note:** Building on macOS (especially ARM/M-series Macs) requires cross-compilation to x86_64-linux. This process will take 1-2 hours and download several GB of dependencies.
+**Option B: Remote Management (IPMI/iDRAC)**
+- Access remote management interface
+- Mount the built ISO as virtual media
+- Boot from virtual media
 
-The generated ISO will be named `nixos-custom-installer.iso`.
+**Option C: Hosting Provider Rescue Mode**
+- Boot into provider's rescue system via control panel
 
-### Writing to USB Drive
+### 5. Deploy with nixos-anywhere
 
-**On macOS:**
-```bash
-diskutil list  # Find your USB drive (e.g., /dev/disk2)
-diskutil unmountDisk /dev/diskX
-sudo dd if=nixos-custom-installer.iso of=/dev/rdiskX bs=4m status=progress
-```
-
-**On Linux:**
-```bash
-sudo dd if=nixos-custom-installer.iso of=/dev/sdX bs=4M status=progress
-```
-
-### Testing in VM
-```bash
-./scripts/test-vm.sh
-```
-
-## Default Credentials
-
-The installer includes two users:
-
-- **User:**
-  - **Username:** `monibahmed`
-  - **Password:** `changeme1@`
-  - **Groups:** wheel
-  - **Privileges:** sudo access without password (installer convenience)
-  - **Note:** Manual login required for security
-
-**Important:** After installation, change the password using:
-```bash
-passwd monibahmed
-```
-
-## Network Setup
-
-### WiFi Configuration
-
-**Option 1: Pre-configure WiFi (Recommended for Personal Use)**
-
-1. Edit `wifi-config.nix` and add your WiFi credentials:
-   ```nix
-   networking.wireless.networks = {
-     "Your_SSID" = {
-       psk = "your_password";
-     };
-   };
-   ```
-
-2. Uncomment the wifi-config import in `flake.nix`:
-   ```nix
-   ./wifi-config.nix
-   ```
-
-3. **Note**: `wifi-config.nix` is gitignored and won't be committed to version control
-
-**Option 2: Manual WiFi Setup After Boot**
-
-After booting the installer, connect to WiFi using NetworkManager:
+Once the target is booted and accessible via SSH:
 
 ```bash
-# List available WiFi networks
-nmcli device wifi list
-
-# Connect to a WiFi network
-nmcli device wifi connect "YOUR_SSID" password "YOUR_PASSWORD"
-
-# Check connection status
-nmcli connection show
-
-# Get your IP address
-ip addr show
-```
-
-### SSH Access
-
-Once connected to your network:
-
-1. Find your IP address: `ip addr show` (look for your WiFi interface, usually `wlan0` or `wlp*`)
-2. From another machine: `ssh monibahmed@<IP_ADDRESS>`
-3. Password: `changeme` (change this immediately!)
-
-**Note**: SSH is enabled by default on boot. Make sure to change the default password for security!
-
-## Testing the ISO
-
-### Option 1: Test in QEMU (Recommended for Quick Testing)
-
-```bash
-./scripts/test-vm.sh
+# From your local machine
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#your-server \
+  root@<target-ip>
 ```
 
 This will:
-- Create a virtual machine with QEMU
-- Boot from the ISO
-- Forward SSH port 2222 → 22 (VM)
-- Allow testing without writing to physical media
+- Partition disks according to disko-config.nix
+- Install NixOS with your configuration
+- Set up home-manager for your user
+- Reboot into the new system
 
-**During VM testing:**
-- Check boot process
-- Test WiFi commands (if configured)
-- Test SSH: `ssh -p 2222 monibahmed@localhost`
-- Verify all packages are installed
-- Exit QEMU: Press `Ctrl+A` then `X`
+### 6. Connect via VS Code
 
-**Requirements:**
-- macOS: `brew install qemu`
-- Linux: `sudo apt install qemu-system-x86` (Debian/Ubuntu)
+After installation completes:
 
-### Option 2: Test in VirtualBox
+```bash
+# Test SSH connection
+ssh monib@<server-ip>
 
-1. Open VirtualBox
-2. Create new VM (Type: Linux, Version: Other Linux 64-bit)
-3. Settings → Storage → Add optical drive → Select ISO
-4. Settings → Network → Adapter 1 → Bridged Adapter
-5. Start VM and test
+# In VS Code:
+# 1. Install "Remote - SSH" extension
+# 2. Connect to: monib@<server-ip>
+# 3. VS Code will auto-install its server components
+```
 
-### Option 3: Test in VMware
+## Configuration Files Explained
 
-1. Create new VM
-2. Select "Install from disc image" → Browse to ISO
-3. Configure network as Bridged
-4. Start VM and test
+### flake.nix
+Defines inputs (nixpkgs, home-manager, disko) and outputs (system configurations). This is the entry point for your entire system definition.
 
-### Option 4: Test on Physical Hardware
-
-Write to USB and boot from it (see "Writing to USB Drive" section above)
-
-## Customization
-
-Edit `modules/installer.nix` to customize:
-- Timezone and locale settings
-- Additional packages for the installer
+### configuration.nix
+System-level settings:
 - Network configuration
-- SSH and other services
+- Enabled services (SSH, WebDAV, etc.)
+- User accounts
+- Firewall rules
+- System packages
 
-Edit `modules/base.nix` to customize:
-- User configuration for monibahmed
-- System packages and services
-- SSH settings and security options
+### disko-config.nix
+Declarative disk partitioning:
+- Partition layout (EFI, swap, root)
+- Filesystem types
+- Mount points
 
-## Features
+### home.nix
+User-level configuration via home-manager:
+- Shell environment (zsh, bash)
+- Development tools (git, neovim, etc.)
+- Dotfiles and personal settings
+- User packages
 
-- Based on NixOS minimal installation CD
-- Pre-configured user: `monibahmed` with sudo privileges
-- Optimized for home/webdav server with development support
-- Pre-configured with essential tools: vim, git, wget, curl, htop, tmux, parted
-- Development tools included: Node.js, Python3, GCC, make
-- SSH enabled for remote installation and management
-- VS Code Remote SSH ready (includes all required dependencies)
-- NetworkManager for easy network configuration
-- Flakes and nix-command experimental features enabled
-- Security-hardened SSH (no root login, password authentication enabled)
+## Common Tasks
 
-## Contributing
+### Update System Configuration
 
-Contributions are welcome! Please submit a pull request or open an issue for any enhancements or bug fixes.
+```bash
+# Edit configuration files
+vim configuration.nix
 
-## License
+# Test configuration locally (if on NixOS)
+sudo nixos-rebuild test --flake .#your-server
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
+# Deploy to remote server
+nixos-rebuild switch --flake .#your-server \
+  --target-host monib@<server-ip> \
+  --use-remote-sudo
+```
+
+### Update Dependencies
+
+```bash
+# Update flake inputs
+nix flake update
+
+# Review changes
+git diff flake.lock
+
+# Deploy updated system
+nixos-rebuild switch --flake .#your-server --target-host monib@<server-ip>
+```
+
+### Add New Service
+
+```nix
+# In configuration.nix
+services.yourservice = {
+  enable = true;
+  # configuration options
+};
+
+# Open firewall if needed
+networking.firewall.allowedTCPPorts = [ 8080 ];
+```
+
+### Rollback
+
+NixOS keeps previous generations:
+
+```bash
+# SSH to server
+ssh monib@<server-ip>
+
+# List generations
+sudo nix-env --list-generations --profile /nix/var/nix/profiles/system
+
+# Rollback to previous
+sudo nixos-rebuild switch --rollback
+
+# Or boot into specific generation via bootloader menu
+```
+
+## Troubleshooting
+
+### nixos-anywhere fails with disk errors
+Check disko-config.nix device paths match your target hardware. Boot into live environment and run `lsblk` to verify disk names.
+
+### SSH connection refused after install
+Verify firewall settings in configuration.nix allow SSH (port 22). Check that openssh.enable = true.
+
+### VS Code remote connection issues
+Ensure your user has proper shell and permissions. VS Code needs write access to ~/.vscode-server.
+
+### Build fails with sandbox errors
+Some ISO builds need `--option sandbox false`. Try without it first for security.
+
+## Security Considerations
+
+- Use SSH keys, not passwords
+- Keep PermitRootLogin = "no"
+- Configure firewall to only allow necessary ports
+- Regularly update with `nix flake update`
+- Review configuration changes before deploying
+
+## Advanced Topics
+
+### Multiple Machines
+Define multiple configurations in flake.nix:
+
+```nix
+nixosConfigurations = {
+  server1 = nixpkgs.lib.nixosSystem { ... };
+  server2 = nixpkgs.lib.nixosSystem { ... };
+};
+```
+
+### Secrets Management
+Consider using sops-nix or agenix for managing secrets like passwords and API keys.
+
+### Backup Strategy
+NixOS configuration is in git, but data needs separate backup. Consider:
+- Regular backups of /home and /var
+- Automated backup services (restic, borg)
+- Version control for configuration files
+
+## Resources
+
+- [NixOS Manual](https://nixos.org/manual/nixos/stable/)
+- [nixos-anywhere Documentation](https://github.com/nix-community/nixos-anywhere)
+- [home-manager Manual](https://nix-community.github.io/home-manager/)
+- [disko Documentation](https://github.com/nix-community/disko)
+- [Nix Flakes](https://nixos.wiki/wiki/Flakes)
+
+## Support
+
+For issues specific to this configuration, open an issue in this repository.
+
+For NixOS questions, consult the official documentation or community forums.
