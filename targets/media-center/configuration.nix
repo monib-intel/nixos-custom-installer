@@ -1,5 +1,5 @@
 # Media center specific configuration
-{ config, pkgs, ... }: {
+{ config, pkgs, lib, ... }: {
   # Hardware-specific imports
   imports = [
     # Include hardware scan results if available

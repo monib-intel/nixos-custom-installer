@@ -1,7 +1,7 @@
 # Template configuration for new targets
 # Copy this file to targets/<target-name>/configuration.nix
 # and customize for your specific needs
-{ config, pkgs, ... }: {
+{ config, pkgs, lib, ... }: {
   # Hardware-specific imports
   imports = [
     # Include hardware scan results if available
