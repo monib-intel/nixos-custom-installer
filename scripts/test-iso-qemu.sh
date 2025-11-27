@@ -15,8 +15,6 @@ ISO_PATH=""
 # Find OVMF firmware path
 find_ovmf() {
     local ovmf_paths=(
-        # Nix store paths (when running in nix develop)
-        "/nix/store/"*"-OVMF-"*/FV/OVMF.fd
         # Common Linux distribution paths
         "/usr/share/ovmf/OVMF.fd"
         "/usr/share/OVMF/OVMF_CODE.fd"
@@ -24,15 +22,21 @@ find_ovmf() {
         "/usr/share/qemu/OVMF.fd"
     )
     
+    # Check static paths first
     for path in "${ovmf_paths[@]}"; do
-        # Use ls to expand glob patterns
-        local expanded
-        expanded=$(ls -1 $path 2>/dev/null | head -1) || true
-        if [ -n "$expanded" ] && [ -f "$expanded" ]; then
-            echo "$expanded"
+        if [ -f "$path" ]; then
+            echo "$path"
             return 0
         fi
     done
+    
+    # Check Nix store paths (when running in nix develop)
+    local nix_ovmf
+    nix_ovmf=$(find /nix/store -maxdepth 2 -type d -name "FV" 2>/dev/null | head -1)
+    if [ -n "$nix_ovmf" ] && [ -f "$nix_ovmf/OVMF.fd" ]; then
+        echo "$nix_ovmf/OVMF.fd"
+        return 0
+    fi
     
     echo ""
     return 1
@@ -154,29 +158,34 @@ echo "  - The VM will boot from the ISO"
 echo "  - You can test the installation process on the virtual disk"
 echo ""
 
-# Run QEMU with UEFI support
-qemu-system-x86_64 \
-    -enable-kvm \
-    -m "$MEMORY" \
-    -smp "$CPUS" \
-    -boot d \
-    -cdrom "$ISO_PATH" \
-    -drive file="$DISK_FILE",format=qcow2,if=virtio \
-    -netdev user,id=net0,hostfwd=tcp::2222-:22 \
-    -device virtio-net-pci,netdev=net0 \
-    -bios "$OVMF_PATH" \
-    -display gtk \
-    2>/dev/null || {
-        # Fallback without KVM if not available
-        echo "Note: KVM not available, running without hardware acceleration (slower)"
-        qemu-system-x86_64 \
-            -m "$MEMORY" \
-            -smp "$CPUS" \
-            -boot d \
-            -cdrom "$ISO_PATH" \
-            -drive file="$DISK_FILE",format=qcow2,if=virtio \
-            -netdev user,id=net0,hostfwd=tcp::2222-:22 \
-            -device virtio-net-pci,netdev=net0 \
-            -bios "$OVMF_PATH" \
-            -display gtk
-    }
+# Check if KVM is available
+run_qemu() {
+    local use_kvm="$1"
+    local kvm_flag=""
+    
+    if [ "$use_kvm" = "true" ]; then
+        kvm_flag="-enable-kvm"
+    fi
+    
+    # shellcheck disable=SC2086
+    qemu-system-x86_64 \
+        $kvm_flag \
+        -m "$MEMORY" \
+        -smp "$CPUS" \
+        -boot d \
+        -cdrom "$ISO_PATH" \
+        -drive file="$DISK_FILE",format=qcow2,if=virtio \
+        -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+        -device virtio-net-pci,netdev=net0 \
+        -bios "$OVMF_PATH" \
+        -display gtk
+}
+
+# Try with KVM first, fall back to software emulation
+if [ -e /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+    echo "Using KVM hardware acceleration"
+    run_qemu "true"
+else
+    echo "Note: KVM not available, running without hardware acceleration (slower)"
+    run_qemu "false"
+fi
